@@ -378,8 +378,8 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
         self.log('train_loss_fusion', torch.stack(
             [x['loss_fusion'] for x in outputs]).mean().item())
 
-    def on_on_validation_epoch_end(self, outputs) -> None:
-        super().on_on_validation_epoch_end(outputs)
+    def on_validation_epoch_end(self, outputs) -> None:
+        super().on_validation_epoch_end(outputs)
         val_loss_fusion = torch.stack(
             [x['loss_fusion'] for x in outputs]).mean().item()
         self.log('val_loss_fusion', val_loss_fusion)
@@ -440,8 +440,8 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
 
         return [train_scores, val_scores, test_scores]
 
-    def on_on_test_epoch_end(self, outputs, save_preds=False):
-        super().on_on_test_epoch_end(outputs, save_preds)
+    def on_test_epoch_end(self, outputs, save_preds=False):
+        super().on_test_epoch_end(outputs, save_preds)
         preds = torch.cat([x['preds'] for x in outputs])
         preds_image = torch.cat([x['preds_image'] for x in outputs])
         preds_audio = torch.cat([x['preds_audio'] for x in outputs])
@@ -633,8 +633,8 @@ class AVMnistMixerMultiLossUQ(AVMnistMixerMultiLoss):
         wandb.log({'train_uncertainty_audio': torch.stack(
             [x['uncertainty_audio'] for x in outputs]).mean()})
 
-    def on_on_validation_epoch_end(self, outputs) -> None:
-        super().on_on_validation_epoch_end(outputs)
+    def on_validation_epoch_end(self, outputs) -> None:
+        super().on_validation_epoch_end(outputs)
         wandb.log({'val_uncertainty': torch.stack(
             [x['uncertainty'] for x in outputs]).mean()})
         wandb.log({'val_uncertainty_image': torch.stack(
@@ -642,8 +642,8 @@ class AVMnistMixerMultiLossUQ(AVMnistMixerMultiLoss):
         wandb.log({'val_uncertainty_audio': torch.stack(
             [x['uncertainty_audio'] for x in outputs]).mean()})
 
-    def on_on_test_epoch_end(self, outputs) -> None:
-        super().on_on_test_epoch_end(outputs)
+    def on_test_epoch_end(self, outputs) -> None:
+        super().on_test_epoch_end(outputs)
         wandb.log({'test_uncertainty': torch.stack(
             [x['uncertainty'] for x in outputs]).mean()})
         wandb.log({'test_uncertainty_image': torch.stack(
