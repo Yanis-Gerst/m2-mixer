@@ -25,3 +25,6 @@ scikit-learn==1.6.1
 # ipython~=8.8.0
 ipython==8.12.3
 softadapt @ git+https://github.com/dr-aheydari/SoftAdapt.git@66e7bd6e300cad9b41a9edfd81c0d2b265a1504e
+pandas==2.2.3
+tensorboard==2.19.0
+tensorboardX==2.6.2.2

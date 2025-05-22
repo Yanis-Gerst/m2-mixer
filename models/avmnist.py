@@ -364,8 +364,9 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
             param.requires_grad = False
         self.modalities_freezed = True
 
-    def on_train_epoch_end(self, outputs) -> None:
-        super().on_train_epoch_end(outputs)
+    def on_train_epoch_end(self) -> None:
+        outputs = self.train_step_outputs
+        super().on_train_epoch_end()
         wandb.log({'train_loss_image': torch.stack(
             [x['loss_image'] for x in outputs]).mean().item()})
         wandb.log({'train_loss_audio': torch.stack(
@@ -374,9 +375,11 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
             [x['loss_fusion'] for x in outputs]).mean().item()})
         self.log('train_loss_fusion', torch.stack(
             [x['loss_fusion'] for x in outputs]).mean().item())
+        self.train_step_outputs.clear()
 
-    def on_validation_epoch_end(self, outputs) -> None:
-        super().on_validation_epoch_end(outputs)
+    def on_validation_epoch_end(self) -> None:
+        outputs = self.validation_step_outputs
+        super().on_validation_epoch_end()
         val_loss_fusion = torch.stack(
             [x['loss_fusion'] for x in outputs]).mean().item()
         self.log('val_loss_fusion', val_loss_fusion)
@@ -411,6 +414,7 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
                 self.image_criterion_history = list()
                 self.audio_criterion_history = list()
                 self.fusion_criterion_history = list()
+        self.validation_step_outputs.clear()
 
     def setup_criterion(self) -> torch.nn.Module:
         return None
@@ -437,7 +441,8 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
 
         return [train_scores, val_scores, test_scores]
 
-    def on_test_epoch_end(self, outputs, save_preds=False):
+    def on_test_epoch_end(self, save_preds=False):
+        outputs = self.test_step_outputs
         super().on_test_epoch_end(outputs, save_preds)
         preds = torch.cat([x['preds'] for x in outputs])
         preds_image = torch.cat([x['preds_image'] for x in outputs])
@@ -454,6 +459,7 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
                         image_logits=image_logits, audio_logits=audio_logits, logits=logits),
                    save_path + '/test_preds.pt')
         print(f'[!] Saved test predictions to {save_path}/test_preds.pt')
+        self.test_step_outputs.clear()
 
     @classmethod
     def load_from_checkpoint(
@@ -474,7 +480,7 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
         optimizer = torch.optim.Adam(
             filter(lambda p: p.requires_grad, self.parameters()), **optimizer_cfg)
         scheduler = ReduceLROnPlateau(
-            optimizer, patience=self.scheduler_patience, verbose=True)
+            optimizer, patience=self.scheduler_patience)
 
         return {
             "optimizer": optimizer,

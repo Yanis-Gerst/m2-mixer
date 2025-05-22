@@ -40,7 +40,8 @@ if __name__ == '__main__':
         deep_update(dataset_cfg, ucfg.dataset)
 
     if args.disable_wandb:
-        wandb.init(project='MMixer', name=args.name, config=todict(cfg), mode='disabled')
+        wandb.init(project='MMixer', name=args.name,
+                   config=todict(cfg), mode='disabled')
     else:
         wandb.init(project='MMixer', name=args.name, config=todict(cfg))
 
@@ -58,7 +59,8 @@ if __name__ == '__main__':
 
     trainer = pl.Trainer(
         callbacks=[
-            pl.callbacks.EarlyStopping(monitor='val_loss', patience=30, mode='min'),
+            pl.callbacks.EarlyStopping(
+                monitor='val_loss', patience=30, mode='min'),
             pl.callbacks.ModelCheckpoint(
                 monitor=train_cfg.monitor,
                 save_last=True,
@@ -67,10 +69,11 @@ if __name__ == '__main__':
             )
         ],
         accelerator='gpu',
-        devices=-1,
+        devices="auto",
         log_every_n_steps=train_cfg.log_interval_steps,
-        logger=pl.loggers.TensorBoardLogger(train_cfg.tensorboard_path, args.name),
-        max_epochs=train_cfg.epochs
+        logger=pl.loggers.TensorBoardLogger(
+            train_cfg.tensorboard_path, args.name),
+        max_epochs=train_cfg.epochs,
     )
     wandb.config.update({"run_version": trainer.logger.version})
     if args.mode == 'train':
@@ -80,4 +83,5 @@ if __name__ == '__main__':
             print('KeyboardInterrupt: Trying to test with the current best model')
         trainer.test(train_module, data_module, ckpt_path='best')
     if args.mode == 'test':
+
         trainer.test(train_module, data_module)

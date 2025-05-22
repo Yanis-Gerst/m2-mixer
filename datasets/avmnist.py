@@ -8,6 +8,8 @@ import pytorch_lightning as pl
 import torchvision.transforms as T
 from scipy import signal
 from tqdm import tqdm
+from skimage.transform import resize
+import matplotlib.pyplot as plt
 
 # %%
 
@@ -106,6 +108,7 @@ class AVMnist(Dataset):
         self.transform = transform
         self.modal_separate = modal_separate
         self.modal = modal
+        print(stage)
         if not modal_separate:
             if stage == 'train':
                 self.audio_data = np.load(os.path.join(
@@ -122,8 +125,6 @@ class AVMnist(Dataset):
                 self.labels = np.load(os.path.join(
                     root_dir, 'test_labels.npy'))
 
-            self.audio_data = [wav_to_spectogram(
-                audio) for audio in tqdm(self.audio_data)]
             self.audio_data = self.audio_data[:, np.newaxis, :, :]
             self.mnist_data = self.mnist_data.reshape(
                 self.mnist_data.shape[0], 1, 28, 28)
@@ -296,6 +297,6 @@ class AVMnistIntermediateDataModule(pl.LightningDataModule):
                           num_workers=self.num_workers)
 
 
-def wav_to_spectogram(audio, sample_rate=8000):
-    frequencies, times, spectrogram = signal.spectrogram(audio, sample_rate)
-    return spectrogram
+# def wav_to_spectogram(audio, sample_rate=8000):
+#     frequencies, times, spectrogram = signal.spectrogram(audio, sample_rate)
+#     return spectrogram
