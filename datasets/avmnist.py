@@ -6,18 +6,23 @@ from torch.utils.data import Dataset, DataLoader, Subset
 import random
 import pytorch_lightning as pl
 import torchvision.transforms as T
-
+from scipy import signal
+from tqdm import tqdm
 
 # %%
+
+
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
     def __call__(self, sample):
         tensor_dict = {}
         if sample.get('audio') is not None:
-            tensor_dict['audio'] = torch.from_numpy(sample['audio'].astype(np.float32))
+            tensor_dict['audio'] = torch.from_numpy(
+                sample['audio'].astype(np.float32))
         if sample.get('image') is not None:
-            tensor_dict['image'] = torch.from_numpy(sample['image'].astype(np.float32))
+            tensor_dict['image'] = torch.from_numpy(
+                sample['image'].astype(np.float32))
         tensor_dict['label'] = int(sample['label'])
 
         return tensor_dict
@@ -34,7 +39,8 @@ class Normalize(object):
         if sample.get('audio') is not None:
             tensor_dict['audio'] = sample['audio']
         if sample.get('image') is not None:
-            image = self._normalize(sample['image'], mean=self.mean_vector, std=self.std_devs)
+            image = self._normalize(
+                sample['image'], mean=self.mean_vector, std=self.std_devs)
             tensor_dict['image'] = image
         tensor_dict['label'] = int(sample['label'])
 
@@ -102,32 +108,46 @@ class AVMnist(Dataset):
         self.modal = modal
         if not modal_separate:
             if stage == 'train':
-                self.audio_data = np.load(os.path.join(root_dir, 'audio', 'train_data.npy'))
-                self.mnist_data = np.load(os.path.join(root_dir, 'image', 'train_data.npy'))
-                self.labels = np.load(os.path.join(root_dir, 'train_labels.npy'))
+                self.audio_data = np.load(os.path.join(
+                    root_dir, 'audio', 'train_data.npy'))
+                self.mnist_data = np.load(os.path.join(
+                    root_dir, 'image', 'train_data.npy'))
+                self.labels = np.load(os.path.join(
+                    root_dir, 'train_labels.npy'))
             else:
-                self.audio_data = np.load(os.path.join(root_dir, 'audio', 'test_data.npy'))
-                self.mnist_data = np.load(os.path.join(root_dir, 'image', 'test_data.npy'))
-                self.labels = np.load(os.path.join(root_dir, 'test_labels.npy'))
+                self.audio_data = np.load(os.path.join(
+                    root_dir, 'audio', 'test_data.npy'))
+                self.mnist_data = np.load(os.path.join(
+                    root_dir, 'image', 'test_data.npy'))
+                self.labels = np.load(os.path.join(
+                    root_dir, 'test_labels.npy'))
 
+            self.audio_data = [wav_to_spectogram(
+                audio) for audio in tqdm(self.audio_data)]
             self.audio_data = self.audio_data[:, np.newaxis, :, :]
-            self.mnist_data = self.mnist_data.reshape(self.mnist_data.shape[0], 1, 28, 28)
+            self.mnist_data = self.mnist_data.reshape(
+                self.mnist_data.shape[0], 1, 28, 28)
         else:
             if modal:
                 if modal not in ['audio', 'image']:
                     raise ValueError('the value of modal is allowed')
 
                 if stage == 'train':
-                    self.data = np.load(os.path.join(root_dir, modal, 'train_data.npy'))
-                    self.labels = np.load(os.path.join(root_dir, 'train_labels.npy'))
+                    self.data = np.load(os.path.join(
+                        root_dir, modal, 'train_data.npy'))
+                    self.labels = np.load(os.path.join(
+                        root_dir, 'train_labels.npy'))
                 else:
-                    self.data = np.load(os.path.join(root_dir, modal, 'test_data.npy'))
-                    self.labels = np.load(os.path.join(root_dir, 'test_labels.npy'))
+                    self.data = np.load(os.path.join(
+                        root_dir, modal, 'test_data.npy'))
+                    self.labels = np.load(os.path.join(
+                        root_dir, 'test_labels.npy'))
 
                 if modal == 'audio':
                     self.data = self.data[:, np.newaxis, :, :]
                 elif modal == 'image':
-                    self.data = self.data.reshape(self.data.shape[0], 1, 28, 28)
+                    self.data = self.data.reshape(
+                        self.data.shape[0], 1, 28, 28)
 
             else:
                 raise ValueError('the value of modal should be given')
@@ -167,9 +187,12 @@ class AVMnistDataModule(pl.LightningDataModule):
         # transform = T.Compose([ToTensor(), RandomModalityMuting(p_muting=self.p_muting)])
         transform = T.Compose([ToTensor()])
 
-        train_dataset = AVMnist(root_dir=self.data_dir, transform=transform, stage='train')
-        val_dataset = AVMnist(root_dir=self.data_dir, transform=transform, stage='train')
-        self.test_dataset = AVMnist(root_dir=self.data_dir, transform=transform, stage='test')
+        train_dataset = AVMnist(root_dir=self.data_dir,
+                                transform=transform, stage='train')
+        val_dataset = AVMnist(root_dir=self.data_dir,
+                              transform=transform, stage='train')
+        self.test_dataset = AVMnist(
+            root_dir=self.data_dir, transform=transform, stage='test')
 
         train_idxs = list(range(0, 55000))
         valid_idxs = list(range(55000, 60000))
@@ -195,17 +218,26 @@ class AVMnistIntermediate(Dataset):
     def __init__(self, root_dir='./corrects_data',  # args.datadir
                  stage='train', modality='multi'):
         if modality == 'multi':
-            self.data_image = np.load(os.path.join(root_dir, stage + '/image_vectors.npy'))
-            self.data_audio = np.load(os.path.join(root_dir, stage + '/audio_vectors.npy'))
-            self.data_fusion = np.load(os.path.join(root_dir, stage + '/fusion_vectors.npy'))
-            self.image_labels = np.load(os.path.join(root_dir, stage + '/image_corrects.npy'))
-            self.audio_labels = np.load(os.path.join(root_dir, stage + '/audio_corrects.npy'))
-            self.fusion_labels = np.load(os.path.join(root_dir, stage + '/fusion_corrects.npy'))
+            self.data_image = np.load(os.path.join(
+                root_dir, stage + '/image_vectors.npy'))
+            self.data_audio = np.load(os.path.join(
+                root_dir, stage + '/audio_vectors.npy'))
+            self.data_fusion = np.load(os.path.join(
+                root_dir, stage + '/fusion_vectors.npy'))
+            self.image_labels = np.load(os.path.join(
+                root_dir, stage + '/image_corrects.npy'))
+            self.audio_labels = np.load(os.path.join(
+                root_dir, stage + '/audio_corrects.npy'))
+            self.fusion_labels = np.load(os.path.join(
+                root_dir, stage + '/fusion_corrects.npy'))
         elif modality in ('image', 'audio', 'fusion'):
-            self.data = np.load(os.path.join(root_dir, stage + '/' + modality + '_vectors.npy'))
-            self.labels = np.load(os.path.join(root_dir, stage + '/' + modality + '_corrects.npy'))
+            self.data = np.load(os.path.join(
+                root_dir, stage + '/' + modality + '_vectors.npy'))
+            self.labels = np.load(os.path.join(
+                root_dir, stage + '/' + modality + '_corrects.npy'))
         else:
-            raise ValueError('Modality should be one of multi, image, audio, fusion')
+            raise ValueError(
+                'Modality should be one of multi, image, audio, fusion')
 
     def __len__(self):
         if hasattr(self, 'data'):
@@ -244,9 +276,12 @@ class AVMnistIntermediateDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
 
     def setup(self, stage: str = None):
-        self.train_dataset = AVMnistIntermediate(root_dir=self.data_dir, stage='train', modality=self.modality)
-        self.valid_dataset = AVMnistIntermediate(root_dir=self.data_dir, stage='train', modality=self.modality)
-        self.test_dataset = AVMnistIntermediate(root_dir=self.data_dir, stage='test', modality=self.modality)
+        self.train_dataset = AVMnistIntermediate(
+            root_dir=self.data_dir, stage='train', modality=self.modality)
+        self.valid_dataset = AVMnistIntermediate(
+            root_dir=self.data_dir, stage='train', modality=self.modality)
+        self.test_dataset = AVMnistIntermediate(
+            root_dir=self.data_dir, stage='test', modality=self.modality)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(dataset=self.train_dataset, batch_size=self.batch_size, shuffle=False,
@@ -259,3 +294,8 @@ class AVMnistIntermediateDataModule(pl.LightningDataModule):
     def test_dataloader(self) -> DataLoader:
         return DataLoader(dataset=self.test_dataset, batch_size=self.batch_size, shuffle=True,
                           num_workers=self.num_workers)
+
+
+def wav_to_spectogram(audio, sample_rate=8000):
+    frequencies, times, spectrogram = signal.spectrogram(audio, sample_rate)
+    return spectrogram
