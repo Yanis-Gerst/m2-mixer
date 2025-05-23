@@ -443,7 +443,7 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
 
     def on_test_epoch_end(self, save_preds=False):
         outputs = self.test_step_outputs
-        super().on_test_epoch_end(outputs, save_preds)
+        super().on_test_epoch_end(save_preds)
         preds = torch.cat([x['preds'] for x in outputs])
         preds_image = torch.cat([x['preds_image'] for x in outputs])
         preds_audio = torch.cat([x['preds_audio'] for x in outputs])

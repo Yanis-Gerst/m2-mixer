@@ -78,7 +78,8 @@ if __name__ == '__main__':
     wandb.config.update({"run_version": trainer.logger.version})
     if args.mode == 'train':
         try:
-            trainer.fit(train_module, data_module)
+
+            trainer.fit(train_module, data_module, ckpt_path=args.ckpt)
         except KeyboardInterrupt:
             print('KeyboardInterrupt: Trying to test with the current best model')
         trainer.test(train_module, data_module, ckpt_path='best')

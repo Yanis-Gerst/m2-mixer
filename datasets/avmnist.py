@@ -108,7 +108,6 @@ class AVMnist(Dataset):
         self.transform = transform
         self.modal_separate = modal_separate
         self.modal = modal
-        print(stage)
         if not modal_separate:
             if stage == 'train':
                 self.audio_data = np.load(os.path.join(

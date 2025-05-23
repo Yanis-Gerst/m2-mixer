@@ -53,8 +53,8 @@ class Normalize(object):
             Tensor: Normalized Tensor image.
         """
         if not self._is_tensor_image(tensor):
-            print(tensor.size())
-            raise TypeError('tensor is not a torch image. Its size is {}.'.format(tensor.size()))
+            raise TypeError(
+                'tensor is not a torch image. Its size is {}.'.format(tensor.size()))
         # TODO: make efficient
         for t, m, s in zip(tensor, mean, std):
             t.sub_(m).div_(s)
@@ -119,9 +119,12 @@ class MM_IMDB(Dataset):
 
     def __getitem__(self, idx):
 
-        imagepath = os.path.join(self.root_dir, self.stage, 'image_{:06}.npy'.format(idx))
-        labelpath = os.path.join(self.root_dir, self.stage, 'label_{:06}.npy'.format(idx))
-        textpath = os.path.join(self.root_dir, self.stage, 'text_{:06}.npy'.format(idx))
+        imagepath = os.path.join(
+            self.root_dir, self.stage, 'image_{:06}.npy'.format(idx))
+        labelpath = os.path.join(
+            self.root_dir, self.stage, 'label_{:06}.npy'.format(idx))
+        textpath = os.path.join(self.root_dir, self.stage,
+                                'text_{:06}.npy'.format(idx))
 
         image = np.load(imagepath).astype(np.float32).T
         label = torch.tensor(np.load(labelpath))
@@ -129,7 +132,8 @@ class MM_IMDB(Dataset):
 
         textlen = text.shape[0]
 
-        sample = {'image': image, 'text': np.zeros(20), 'label': label, 'textlen': textlen}
+        sample = {'image': image, 'text': np.zeros(
+            20), 'label': label, 'textlen': textlen}
 
         if self.transform:
             for m in self.transform:
@@ -211,9 +215,12 @@ class MMIMDBExtDataModule(pl.LightningDataModule):
         #     T.Normalize(mean=torch.tensor([0.5000, 0.5000, 0.5000]), std=torch.tensor([0.5000, 0.5000, 0.5000]))]))
         # val_test_transforms = train_transforms
 
-        self.train_set = MM_IMDB(os.path.join(self.data_dir), stage='train', transform=train_transforms)
-        self.eval_set = MM_IMDB(os.path.join(self.data_dir), stage='dev', transform=val_test_transforms)
-        self.test_set = MM_IMDB(os.path.join(self.data_dir), stage='test', transform=val_test_transforms)
+        self.train_set = MM_IMDB(os.path.join(
+            self.data_dir), stage='train', transform=train_transforms)
+        self.eval_set = MM_IMDB(os.path.join(
+            self.data_dir), stage='dev', transform=val_test_transforms)
+        self.test_set = MM_IMDB(os.path.join(
+            self.data_dir), stage='test', transform=val_test_transforms)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(self.train_set, self.batch_size, shuffle=True,
@@ -233,10 +240,11 @@ if __name__ == '__main__':
         parser = argparse.ArgumentParser(description='Modality optimization.')
         parser.add_argument('--datadir', type=str, help='data directory',
                             default='/mnt/scratch/xiaoxiang/yihang/mmimdb/')
-        parser.add_argument('--small_dataset', action='store_true', default=False, help='dataset scale')
-        parser.add_argument('--average_text', action='store_true', default=False, help='averaging text features')
+        parser.add_argument('--small_dataset', action='store_true',
+                            default=False, help='dataset scale')
+        parser.add_argument('--average_text', action='store_true',
+                            default=False, help='averaging text features')
         return parser.parse_args("")
-
 
     args = parse_args()
 
