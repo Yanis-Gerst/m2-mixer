@@ -149,6 +149,7 @@ class AbstractTrainTestModule(pl.LightningModule, abc.ABC):
             )})
 
     def test_step(self, batch, batch_idx):
+        print("YOO")
         self.log_n_parameters()
         if self.test_scores is not None:
             for metric in self.test_scores:
@@ -160,6 +161,7 @@ class AbstractTrainTestModule(pl.LightningModule, abc.ABC):
             for metric in self.test_scores:
                 self.test_scores[metric](results['preds'].to(
                     self.device), results['labels'].to(self.device))
+
         self.test_step_outputs.append(results)
         return results
 

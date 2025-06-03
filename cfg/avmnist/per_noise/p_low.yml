@@ -15,7 +15,7 @@ train:
 dataset:
   type: AVMnistDataModule
   params:
-    data_dir: ../data/avmnist_basic_noise
+    data_dir: ../data/avmnist_pixel_noise_low
     batch_size: 32
     num_workers: 2
     p_muting: 0.0

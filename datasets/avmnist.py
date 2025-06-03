@@ -91,10 +91,22 @@ class RandomModalityMuting(object):
         return {'image': im, 'audio': au, 'label': sample['label']}
 
 
+def load_if_exist(path, default_path_in_avmnist_pure):
+    avmnist_pure_path = "../data/avmnist_pure"
+    default_path = os.path.join(
+        avmnist_pure_path, default_path_in_avmnist_pure)
+    if (os.path.exists(path)):
+        print(f"Find {path}")
+        return np.load(path)
+    else:
+        print(f"Can't find {path}, Use default_path {default_path}")
+        return np.load(default_path)
 # %%
+
+
 class AVMnist(Dataset):
 
-    def __init__(self, root_dir='./avmnist',  # args.datadir
+    def __init__(self, root_dir,  # args.datadir
                  transform=None,
                  stage='train',
                  modal_separate=False,
@@ -110,19 +122,21 @@ class AVMnist(Dataset):
         self.modal = modal
         if not modal_separate:
             if stage == 'train':
-                self.audio_data = np.load(os.path.join(
-                    root_dir, 'audio', 'train_data.npy'))
-                self.mnist_data = np.load(os.path.join(
-                    root_dir, 'image', 'train_data.npy'))
-                self.labels = np.load(os.path.join(
-                    root_dir, 'train_labels.npy'))
+                self.audio_data = load_if_exist(os.path.join(
+                    root_dir, 'audio', 'train_spec.npy'), "audio/train_spec.npy")
+                self.mnist_data = load_if_exist(os.path.join(
+                    root_dir, 'image', 'train_data.npy'), "image/train_data.npy")
+                default_label_path = "../data/avmnist_pure/train_labels.npy"
+                self.labels = load_if_exist(os.path.join(
+                    root_dir, 'train_labels.npy'), "train_labels.npy")
             else:
                 self.audio_data = np.load(os.path.join(
-                    root_dir, 'audio', 'test_data.npy'))
+                    "../data/avmnist_pure", 'audio', 'test_spec.npy'))
                 self.mnist_data = np.load(os.path.join(
-                    root_dir, 'image', 'test_data.npy'))
-                self.labels = np.load(os.path.join(
-                    root_dir, 'test_labels.npy'))
+                    "../data/avmnist_pure", 'image', 'test_data.npy'))
+                default_label_path = "../data/avmnist_pure/test_labels.npy"
+                self.labels = load_if_exist(os.path.join(
+                    root_dir, 'test_labels.npy'), "test_labels.npy")
 
             self.audio_data = self.audio_data[:, np.newaxis, :, :]
             self.mnist_data = self.mnist_data.reshape(
@@ -138,8 +152,20 @@ class AVMnist(Dataset):
                     self.labels = np.load(os.path.join(
                         root_dir, 'train_labels.npy'))
                 else:
-                    self.data = np.load(os.path.join(
-                        root_dir, modal, 'test_data.npy'))
+                    if modal == "audio":
+                        self.data = np.load(os.path.join(
+                            root_dir, modal, 'test_spec.npy'))
+                    else:
+                        self.data = np.load(os.path.join(
+                            root_dir, modal, 'test_data.npy'))
+
+                    default_label_path = "../data/avmnist_pure/test_labels.npy"
+                    current_label_path = os.path.join(
+                        root_dir, 'test_labels.npy')
+                    if (os.path.exists(current_label_path)):
+                        self.labels = np.load(current_label_path)
+                    else:
+                        self.labels = np.load(default_label_path)
                     self.labels = np.load(os.path.join(
                         root_dir, 'test_labels.npy'))
 
@@ -151,6 +177,7 @@ class AVMnist(Dataset):
 
             else:
                 raise ValueError('the value of modal should be given')
+        print(self.audio_data[0])
 
     def __len__(self):
         return self.mnist_data.shape[0] if not self.modal_separate else self.data.shape[0]
@@ -295,7 +322,6 @@ class AVMnistIntermediateDataModule(pl.LightningDataModule):
         return DataLoader(dataset=self.test_dataset, batch_size=self.batch_size, shuffle=True,
                           num_workers=self.num_workers)
 
-
-# def wav_to_spectogram(audio, sample_rate=8000):
-#     frequencies, times, spectrogram = signal.spectrogram(audio, sample_rate)
-#     return spectrogram
+    # def wav_to_spectogram(audio, sample_rate=8000):
+    #     frequencies, times, spectrogram = signal.spectrogram(audio, sample_rate)
+    #     return spectrogram

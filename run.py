@@ -84,5 +84,5 @@ if __name__ == '__main__':
             print('KeyboardInterrupt: Trying to test with the current best model')
         trainer.test(train_module, data_module, ckpt_path='best')
     if args.mode == 'test':
-
-        trainer.test(train_module, data_module)
+        trainer.test(train_module, data_module,
+                     ckpt_path="logs/version_34/checkpoints/last.ckpt")

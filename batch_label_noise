@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH --job-name=M2_mixer    # nom du job
+#SBATCH --partition=gpu          # choix de la priorité (ici cpu)
+#SBATCH --nodes=1                # nombre de noeuds
+#SBATCH --ntasks=1               # nombre total de tâches sur tous les nœuds
+#SBATCH --cpus-per-task=16        # nombre de coeur cpu par tâche (>1 si tâches multi-threaded)
+#SBATCH --gres=gpu:1
+#SBATCH --mem=32G         
+#SBATCH --time=72:00:00          # le temps total de run (HH:MM:SS)
+#SBATCH --output=/home/yanis.gerst/slurm/output_file         # nom du fichier de sortie
+#SBATCH --error=/home/yanis.gerst/slurm/error_file          # nom du fichier erreur
+#SBATCH --mail-user=yanis.gerst@etu.univ-amu.fr
+#SBATCH --mail-type=all     
+
+
+echo "Executing on the machine:" $(hostname)
+
+module purge
+# Load Modules 
+srun python run.py --cfg cfg/avmnist/per_noise/label_noise_low.yml --disable-wandb 
+srun python run.py --cfg cfg/avmnist/per_noise/label_noise_medium.yml --disable-wandb 
+srun python run.py --cfg cfg/avmnist/per_noise/label_noise_hard.yml --disable-wandb 
