@@ -78,6 +78,7 @@ class EDLMSELoss(nn.Module):
         # evidence = nn.functional.relu(output)
         evidence = activation_function(output)
         alpha = evidence + 1.
+        print(evidence.shape, target.shape)
         loss = edl_loss(torch.digamma, target, alpha, epoch_num,
                         self.num_classes, self.annealing_step, self.device)
 

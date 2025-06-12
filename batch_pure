@@ -17,5 +17,8 @@ echo "Executing on the machine:" $(hostname)
 
 module purge
 # Load Modules 
-srun python run.py --cfg cfg/avmnist/per_noise/pure.yml --disable-wandb 
+# OPT: 50 annealing step
+srun python run.py --cfg cfg/avmnist/per_noise/pure.yml -a 40 
+srun python run.py --cfg cfg/avmnist/per_noise/pure.yml -a 50
+
 

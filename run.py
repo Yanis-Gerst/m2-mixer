@@ -2,7 +2,7 @@ import argparse
 import os
 
 import wandb
-
+from check import DelayedModelCheckpoint, DelayedEarlyStopping
 import datasets
 import models
 from omegaconf import OmegaConf
@@ -17,6 +17,7 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
     parser.add_argument('-n', '--name', type=str)
     parser.add_argument('-p', '--ckpt', type=str)
     parser.add_argument('-m', '--mode', type=str, default='train')
+    parser.add_argument('-a', '--annealing', type=int, default='40')
 
     parser.add_argument('--disable-wandb', action='store_true', default=False)
     args, unknown = parser.parse_known_args()
@@ -48,9 +49,10 @@ if __name__ == '__main__':
     model = models.get_model(model_cfg.type)
     if args.ckpt:
         train_module = model.load_from_checkpoint(args.ckpt, optimizer_cfg=train_cfg.optimizer,
-                                                  model_cfg=model_cfg)
+                                                  model_cfg=model_cfg, annealing_step=args.annealing)
     else:
-        train_module = model(model_cfg, train_cfg.optimizer)
+        train_module = model(model_cfg, train_cfg.optimizer,
+                             annealing_step=args.annealing)
     wandb.watch(train_module)
     data_module = datasets.get_data_module(dataset_cfg.type)
     if dataset_cfg.params.num_workers == -1:
@@ -59,9 +61,10 @@ if __name__ == '__main__':
 
     trainer = pl.Trainer(
         callbacks=[
-            pl.callbacks.EarlyStopping(
-                monitor='val_loss', patience=30, mode='min'),
-            pl.callbacks.ModelCheckpoint(
+            DelayedEarlyStopping(
+                monitor='val_loss', patience=max(30, args.annealing + 30), mode='min', start_epoch=args.annealing),
+            DelayedModelCheckpoint(
+                start_epoch=args.annealing,
                 monitor=train_cfg.monitor,
                 save_last=True,
                 save_top_k=5,
@@ -78,11 +81,10 @@ if __name__ == '__main__':
     wandb.config.update({"run_version": trainer.logger.version})
     if args.mode == 'train':
         try:
-
             trainer.fit(train_module, data_module, ckpt_path=args.ckpt)
         except KeyboardInterrupt:
             print('KeyboardInterrupt: Trying to test with the current best model')
         trainer.test(train_module, data_module, ckpt_path='best')
     if args.mode == 'test':
         trainer.test(train_module, data_module,
-                     ckpt_path="logs/version_34/checkpoints/last.ckpt")
+                     ckpt_path="logs/version_18/checkpoints/last.ckpt")

@@ -18,6 +18,12 @@ from torch.nn import CrossEntropyLoss
 from torchmetrics import Accuracy, F1Score, Precision, Recall
 from torch.nn.functional import softplus
 import modules
+from octopy.src.uncertainty_quantification.evidential.output_extractor.exponential_evidences import ExponentialEvidences
+from octopy.src.uncertainty_quantification.evidential.quantification.dirichlet import Dirichlet
+from octopy.src.uncertainty_quantification.loss.loss_function import EDLLossMeanWrapper
+from octopy.src.logger.logger import MetricsLogger
+import os
+
 try:
     from softadapt import LossWeightedSoftAdapt
 except ModuleNotFoundError:
@@ -207,7 +213,8 @@ class AVMnistMixer(AbstractAVMnistMixer):
 
 
 class AVMnistMixerMultiLoss(AbstractTrainTestModule):
-    def __init__(self, model_cfg: DictConfig, optimizer_cfg: DictConfig, **kwargs):
+    def __init__(self, model_cfg: DictConfig, optimizer_cfg: DictConfig, annealing_step, **kwargs):
+        self.annealing_step = annealing_step
         super(AVMnistMixerMultiLoss, self).__init__(
             optimizer_cfg, log_confusion_matrix=True, **kwargs)
         self.modalities_freezed = False
@@ -247,13 +254,22 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
         # self.audio_criterion = CrossEntropyLoss()
         # self.fusion_criterion = CrossEntropyLoss()
         self.num_classes = 10
-        self.image_criterion = EDLMSELoss(self.num_classes, 10, self.device)
-        self.audio_criterion = EDLMSELoss(self.num_classes, 10, self.device)
-        self.fusion_criterion = EDLMSELoss(self.num_classes, 10, self.device)
+        self.evidences_collector = ExponentialEvidences()
+        self.uncertainty_quantification = Dirichlet(self.num_classes)
+        self.image_criterion = EDLLossMeanWrapper(self.num_classes, self.annealing_step, torch.digamma, self.evidences_collector)
+        self.audio_criterion = EDLLossMeanWrapper(self.num_classes, self.annealing_step, torch.digamma, self.evidences_collector)
+        self.fusion_criterion = EDLLossMeanWrapper(self.num_classes, self.annealing_step, torch.digamma, self.evidences_collector)
+        # self.image_criterion = EDLMSELoss(self.num_classes, self.annealing_step, self.device)
+        # self.audio_criterion = EDLMSELoss(self.num_classes, self.annealing_step, self.device)
+        # self.fusion_criterion = EDLMSELoss(self.num_classes, self.annealing_step, self.device)
         self.fusion_loss_weight = model_cfg.get('fusion_loss_weight', 1.0 / 3)
         self.fusion_loss_change = model_cfg.get('fusion_loss_change', 0)
         self.loss_change_epoch = model_cfg.get('loss_change_epoch', 0)
         self.use_softadapt = model_cfg.get('use_softadapt', False)
+        self.metrics_logger = MetricsLogger()
+        self.image_criterion_history = []
+        self.audio_criterion_history = []
+        self.fusion_criterion_history = []
         if self.use_softadapt:
             if LossWeightedSoftAdapt is None:
                 print('SoftAdapt is not installed! Hence, will not be used!')
@@ -319,6 +335,7 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
                     audio = torch.zeros_like(audio)
 
         # get modality encodings from feature extractors
+        # Embeddings here
         image_logits = self.image_mixer(image)
         audio_logits = self.audio_mixer(audio)
 
@@ -366,9 +383,9 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
             loss = loss_fusion
 
         # get predictions
-        image_evidences = activation_function(image_logits)
-        audio_evidences = activation_function(audio_logits)
-        evidences = activation_function(logits)
+        image_evidences = self.evidences_collector(image_logits)
+        audio_evidences = self.evidences_collector(audio_logits)
+        evidences = self.evidences_collector(logits)
 
         # preds = torch.softmax(logits, dim=1).argmax(dim=1)
         # preds_image = torch.softmax(image_logits, dim=1).argmax(dim=1)
@@ -378,15 +395,12 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
         preds_image = image_evidences.argmax(dim=1)
         preds_audio = audio_evidences.argmax(dim=1)
 
-        alphas = evidences + 1
-        probs = evidences / alphas.sum(dim=-1, keepdim=True)
-        epidemic_uncertainty = self.num_classes / alphas.sum(dim=-1)
-        alpha_0 = alphas.sum(dim=-1, keepdim=True)
-        beliefs = evidences / alpha_0
-        assert torch.all(torch.isclose(
-            beliefs.sum(dim=1) + epidemic_uncertainty, torch.tensor(1.)))
-        aleatoric_uncertainty = -torch.sum(evidences * (torch.digamma(alphas + 1) -
-                                                        torch.digamma(alpha_0 + 1)), dim=-1)
+        image_epidemic_uncertainty, image_aleatoric_uncertainty = self.uncertainty_quantification(
+            image_evidences)
+        audio_epidemic_uncertainty, audio_aleatoric_uncertainty = self.uncertainty_quantification(
+            audio_evidences)
+        epidemic_uncertainty, aleatoric_uncertainty = self.uncertainty_quantification(
+            evidences)
 
         print(
             f" WDSYO Uncertainty epidemic: {epidemic_uncertainty}, aleatoric: {aleatoric_uncertainty}, preds: {evidences.mean()}")
@@ -406,7 +420,11 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
             'audio_logits': audio_logits,
             'logits': logits,
             "aleatoric_uncertainty": torch.tensor(aleatoric_uncertainty),
-            "epidemic_uncertainty": torch.tensor(epidemic_uncertainty)
+            "epidemic_uncertainty": torch.tensor(epidemic_uncertainty),
+            "image_epidemic_uncertainty": torch.tensor(image_epidemic_uncertainty),
+            "image_aleatoric_uncertainty": torch.tensor(image_aleatoric_uncertainty),
+            "audio_epidemic_uncertainty": torch.tensor(audio_epidemic_uncertainty),
+            "audio_aleatoric_uncertainty": torch.tensor(audio_aleatoric_uncertainty),
         }
 
     def _freeze_modalities(self):
@@ -509,11 +527,45 @@ class AVMnistMixerMultiLoss(AbstractTrainTestModule):
         image_logits = torch.cat([x['image_logits'] for x in outputs])
         audio_logits = torch.cat([x['audio_logits'] for x in outputs])
         logits = torch.cat([x['logits'] for x in outputs])
+        loss_image = torch.stack([x['loss_image'] for x in outputs]).mean().item()
+        loss_audio = torch.stack([x['loss_audio'] for x in outputs]).mean().item()
+        loss_fusion = torch.stack([x['loss_fusion'] for x in outputs]).mean().item()
+        self.image_criterion_history.append(loss_image)
+        self.audio_criterion_history.append(loss_audio)
+        self.fusion_criterion_history.append(loss_fusion)
+        self.metrics_logger.log_metric("preds", preds)
+        self.metrics_logger.log_metric("preds_image", preds_image)
+        self.metrics_logger.log_metric("preds_audio", preds_audio)
+        self.metrics_logger.log_metric("labels", labels)
+        self.metrics_logger.log_metric("image_embeddings", image_logits)
+        self.metrics_logger.log_metric("audio_embeddings", audio_logits)
+        self.metrics_logger.log_metric("logits", logits)
+        self.metrics_logger.log_metric("loss_image", self.image_criterion_history[-1])
+        self.metrics_logger.log_metric("loss_audio", self.audio_criterion_history[-1])
+        self.metrics_logger.log_metric("loss_fusion", self.fusion_criterion_history[-1])
 
+     
         aleatoric_uncertainty = torch.cat(
             [x['aleatoric_uncertainty'] for x in outputs])
         epidemic_uncertainty = torch.cat(
             [x['epidemic_uncertainty'] for x in outputs])
+        image_epidemic_uncertainty = torch.cat(
+            [x['image_epidemic_uncertainty'] for x in outputs])
+        image_aleatoric_uncertainty = torch.cat(
+            [x['image_aleatoric_uncertainty'] for x in outputs])
+        audio_epidemic_uncertainty = torch.cat(
+            [x['audio_epidemic_uncertainty'] for x in outputs])
+        audio_aleatoric_uncertainty = torch.cat(
+            [x['audio_aleatoric_uncertainty'] for x in outputs])
+
+        self.metrics_logger.log_metric("aleatoric_uncertainty", aleatoric_uncertainty)
+        self.metrics_logger.log_metric("epidemic_uncertainty", epidemic_uncertainty)
+        self.metrics_logger.log_metric("image_epidemic_uncertainty", image_epidemic_uncertainty)
+        self.metrics_logger.log_metric("image_aleatoric_uncertainty", image_aleatoric_uncertainty)
+        self.metrics_logger.log_metric("audio_epidemic_uncertainty", audio_epidemic_uncertainty)
+        self.metrics_logger.log_metric("audio_aleatoric_uncertainty", audio_aleatoric_uncertainty)
+        self.metrics_logger.save_metrics(os.path.join(self.logger.save_dir, self.logger.name, f"version_{self.logger.version}", "metrics.pt"))
+        print("Metrics saved at", os.path.join(self.logger.save_dir, self.logger.name, f"version_{self.logger.version}", "metrics.pt"))
         if self.checkpoint_path is None:
             self.checkpoint_path = f'{self.logger.save_dir}/{self.logger.name}/version_{self.logger.version}/checkpoints/'
         save_path = path.dirname(self.checkpoint_path)

@@ -17,10 +17,9 @@ echo "Executing on the machine:" $(hostname)
 
 module purge
 # Load Modules 
-srun python run.py --cfg cfg/avmnist/per_noise/pure.yml --disable-wandb 
-srun python run.py --cfg cfg/avmnist/per_noise/p_low.yml --disable-wandb 
-srun python run.py --cfg cfg/avmnist/per_noise/p_medium.yml --disable-wandb 
-srun python run.py --cfg cfg/avmnist/per_noise/p_hard.yml --disable-wandb 
-srun python run.py --cfg cfg/avmnist/per_noise/label_noise_low.yml --disable-wandb 
-srun python run.py --cfg cfg/avmnist/per_noise/label_noise_medium.yml --disable-wandb 
-srun python run.py --cfg cfg/avmnist/per_noise/label_noise_hard.yml --disable-wandb 
+srun python run.py --cfg cfg/avmnist/per_noise/p_low.yml -n p_low
+srun python run.py --cfg cfg/avmnist/per_noise/p_medium.yml -n p_medium
+srun python run.py --cfg cfg/avmnist/per_noise/p_hard.yml -n p_hard
+srun python run.py --cfg cfg/avmnist/per_noise/label_noise_low.yml -n ln_low
+srun python run.py --cfg cfg/avmnist/per_noise/label_noise_medium.yml -n ln_medium
+srun python run.py --cfg cfg/avmnist/per_noise/label_noise_hard.yml --n ln_hard
