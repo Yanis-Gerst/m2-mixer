@@ -71,7 +71,7 @@ def create_spec_file(audio_paths: list[str]):
     for audio_path in audio_paths:
         base_dir = os.path.dirname(audio_path)
         base_filename = os.path.basename(audio_path)
-        output_filename_base = "train_spec.npy" if "train" in base_filename else "test_spec.npy"
+        output_filename_base = "train_spec_baseù.npy" if "train" in base_filename else "test_spec.npy"
         output_path = os.path.join(base_dir, output_filename_base)
         temp_output_path = output_path + ".tmp"
 
@@ -101,10 +101,11 @@ def create_spec_file(audio_paths: list[str]):
         num_samples = data.shape[0]
         spec_shape = (112, 112)
         dtype_to_use = np.float32
+        print(num_samples)
 
         try:
             output_memmap = np.memmap(
-                temp_output_path, dtype=dtype_to_use, mode='w+', shape=(num_samples, *spec_shape))
+                temp_output_path, dtype=dtype_to_use, mode='w+', shape=(num_samples, 112, 112))
         except Exception as e:
             print(
                 f"Error creating memory-mapped file {temp_output_path}: {e}. Skipping this input file.")
@@ -116,10 +117,13 @@ def create_spec_file(audio_paths: list[str]):
             f"Generating spectrograms for {base_filename} and saving to {output_path} (via {temp_output_path})")
         for i in tqdm(range(num_samples), desc=f"Processing {os.path.basename(audio_path)}"):
             audio_sample_data = data[i]
-            spectrogram = wav_to_spectrogram(
-                audio_sample_data[0], sample_rate=8000, f_length=112, t_length=112)
-            print(spectrogram.shape)
 
+            spectrogram = wav_to_spectrogram(
+                audio_sample_data, sample_rate=8000, f_length=112, t_length=112)
+            print(spectrogram.shape)
+            if i == 1:
+                plt.imshow(spectrogram, cmap="gray")
+                plt.savefig(f"test_spec{i}.png")
             output_memmap[i] = spectrogram
 
         output_memmap.flush()
@@ -140,7 +144,6 @@ def create_spec_file(audio_paths: list[str]):
             del data
 
 
-audio_path = ["../data/avmnist_pure/audio/train_data.npy",
-              "../data/avmnist_pure/audio/test_data.npy"]
+audio_path = ["../data/avmnist_pure/audio/train_data.npy"]
 
 create_spec_file(audio_path)
